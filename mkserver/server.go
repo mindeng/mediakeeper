@@ -15,7 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var host = flag.String("host", "localhost", "host")
+var host = flag.String("host", "", "host")
 var port = flag.String("port", "3333", "port")
 
 var upgrader = websocket.Upgrader{} // use default options
