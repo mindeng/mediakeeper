@@ -16,8 +16,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mindeng/goutils"
+
 	"github.com/gorilla/websocket"
-	"github.com/mindeng/go/minlib"
 	"github.com/mindeng/mediakeeper"
 )
 
@@ -126,7 +127,7 @@ func (archiver *Archiver) walkDirectory(dir string, tasks chan string) {
 func (archiver *Archiver) extractFilesTime(in <-chan string, out chan<- *archiveTask) {
 	var id int = 0
 	for p := range in {
-		t, err := minlib.FileTime(p)
+		t, err := goutils.FileTime(p)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -242,7 +243,7 @@ func (archiver *Archiver) doArchive(task *archiveTask) {
 		// path exists, check file exists
 		u := url.URL{Scheme: "ws", Host: *host + ":" + *port, Path: "/fileExists"}
 
-		if md5, err := minlib.FileChecksum(task.src); err != nil {
+		if md5, err := goutils.FileMd5(task.src); err != nil {
 			log.Fatal("md5:", err)
 		} else {
 			task.md5 = md5
@@ -295,7 +296,7 @@ func (archer *Archiver) checkRemotePathExists(in <-chan *archiveTask, md5CheckTa
 			}
 			task := archer.getTask(resp.ID)
 			if resp.Ok {
-				if md5, err := minlib.FileChecksum(task.src); err != nil {
+				if md5, err := goutils.FileMd5(task.src); err != nil {
 					log.Fatal("md5:", err)
 				} else {
 					task.md5 = md5

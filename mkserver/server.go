@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 
-	"github.com/mindeng/go/minlib"
 	"github.com/mindeng/goutils"
 	"github.com/mindeng/mediakeeper"
 
@@ -101,7 +100,7 @@ func fileExistsHandler(w http.ResponseWriter, r *http.Request) {
 		resp := mediakeeper.GeneralResponse{Ok: false, ID: req.ID}
 		md5 := string(req.Data)
 		if _, err := os.Stat(p); err == nil {
-			if dstMd5, err := minlib.FileChecksum(p); err != nil {
+			if dstMd5, err := goutils.FileMd5(p); err != nil {
 				resp.Err = err.Error()
 			} else if dstMd5 == md5 {
 				resp.Ok = true
@@ -151,7 +150,7 @@ func cpHandler(c *websocket.Conn) (interface{}, error) {
 
 	if _, err := os.Stat(p); err == nil {
 		if data.Md5 != "" {
-			dstMd5, err := minlib.FileChecksum(p)
+			dstMd5, err := goutils.FileMd5(p)
 			if err != nil {
 				resp.Err = err.Error()
 				return resp, nil
@@ -168,7 +167,7 @@ func cpHandler(c *websocket.Conn) (interface{}, error) {
 			p = p[:len(p)-len(ext)] + "-" + data.Md5[:6] + ext
 
 			log.Println("copy to", p)
-			if err := minlib.CopyFileFromReader(p, r, data.ModTime); err != nil {
+			if err := goutils.CopyFileFromReader(p, r, data.ModTime); err != nil {
 				resp.Err = err.Error()
 				return resp, nil
 			} else {
@@ -182,7 +181,7 @@ func cpHandler(c *websocket.Conn) (interface{}, error) {
 	} else {
 		log.Println("copy to", p)
 		os.MkdirAll(path.Dir(p), 0755)
-		if err := minlib.CopyFileFromReader(p, r, data.ModTime); err != nil {
+		if err := goutils.CopyFileFromReader(p, r, data.ModTime); err != nil {
 			resp.Err = err.Error()
 			return resp, nil
 		} else {
