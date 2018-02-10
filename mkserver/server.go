@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -22,6 +23,18 @@ var host = flag.String("host", "", "host")
 var port = flag.String("port", "3333", "port")
 
 var upgrader = websocket.Upgrader{} // use default options
+
+type taskInfo struct {
+	dst  string
+	lock sync.RWMutex
+}
+
+type taskManager struct {
+	tasks map[string]*taskInfo
+	lock  sync.Mutex
+}
+
+var taskMgr = taskManager{tasks: make(map[string]*taskInfo)}
 
 func handleCmdGetHash(req *mediakeeper.CmdRequest) *mediakeeper.CmdResponse {
 	p := req.Path
@@ -138,6 +151,49 @@ func saveFile(p string, info mediakeeper.FileInfo, r io.Reader) error {
 	return nil
 }
 
+func lockFile(p string, wflag bool, logid interface{}) *taskInfo {
+	taskMgr.lock.Lock()
+	if task, ok := taskMgr.tasks[p]; ok {
+		taskMgr.lock.Unlock()
+
+		log.Printf("[%p] Try to lock path %s", logid, p)
+		if wflag {
+			task.lock.Lock()
+		} else {
+			task.lock.RLock()
+		}
+		log.Printf("[%p] Locked path %s", logid, p)
+
+		return task
+	} else {
+		log.Printf("[%p] new task %s", logid, p)
+
+		task = &taskInfo{dst: p}
+		taskMgr.tasks[p] = task
+		if wflag {
+			task.lock.Lock()
+		} else {
+			task.lock.RLock()
+		}
+		taskMgr.lock.Unlock()
+		return task
+	}
+}
+
+func unlockFile(task *taskInfo, wflag bool, logid interface{}) {
+	log.Printf("[%p] delete task %s", logid, task.dst)
+
+	taskMgr.lock.Lock()
+	delete(taskMgr.tasks, task.dst)
+	taskMgr.lock.Unlock()
+
+	if wflag {
+		task.lock.Unlock()
+	} else {
+		task.lock.RUnlock()
+	}
+}
+
 func archiveHandler(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -159,7 +215,9 @@ loop:
 		var resp *mediakeeper.CmdResponse
 		switch req.Cmd {
 		case mediakeeper.CmdGetHash:
+			task := lockFile(req.Path, false, c)
 			resp = handleCmdGetHash(&req)
+			unlockFile(task, false, c)
 		case mediakeeper.CmdPutFile:
 			mt, r, err := c.NextReader()
 			if err != nil {
@@ -171,7 +229,9 @@ loop:
 				break loop
 			}
 
+			task := lockFile(req.Path, true, c)
 			resp = handleCmdPutFile(&req, r)
+			unlockFile(task, true, c)
 		default:
 			log.Println("error cmd:", req.Cmd)
 			break loop
@@ -191,8 +251,6 @@ func main() {
 	flag.Parse()
 	rootDir = flag.Arg(0)
 	log.Print("root:", rootDir)
-
-	log.SetFlags(0)
 
 	http.HandleFunc("/archive", archiveHandler)
 	log.Fatal(http.ListenAndServe(*host+":"+*port, nil))
