@@ -258,6 +258,74 @@ loop:
 			log.Println("Invalid response:", resp)
 			return
 		}
+
+		// Check Nikon param file
+		paramDir := "NKSC_PARAM"
+		srcDir := path.Dir(task.src)
+		srcName := path.Base(task.src)
+		paramSrcPath := path.Join(srcDir, paramDir, srcName+".nksc")
+		paramFilename := path.Base(paramSrcPath)
+		paramDstPath := path.Join(path.Dir(task.dst), paramDir, paramFilename)
+		if fileInfo, err := os.Stat(paramSrcPath); err == nil {
+			// param file exists, copy it
+			fileHash, err := mediakeeper.FileHash(paramSrcPath)
+			if err != nil {
+				log.Println("error: copy param file failed", err)
+				continue
+			}
+			req := mediakeeper.CmdRequest{Cmd: mediakeeper.CmdPutFileForce, Path: paramDstPath}
+			var resp mediakeeper.CmdResponse
+			req.Data, err = json.Marshal(mediakeeper.FileInfo{Hash: fileHash, Size: fileInfo.Size()})
+			if err := c.WriteJSON(&req); err != nil {
+				log.Print("error:", err)
+				return
+			}
+
+			w, err := c.NextWriter(websocket.BinaryMessage)
+			if err != nil {
+				log.Print("error:", err)
+				return
+			}
+
+			f, err := os.Open(paramSrcPath)
+			if err != nil {
+				log.Print("error:", err)
+				continue
+			}
+
+			_, err1 := io.Copy(w, f)
+			err2 := w.Close()
+			err3 := f.Close()
+			if err1 != nil {
+				log.Print("error:", err1)
+				return
+			}
+			if err2 != nil {
+				log.Print("error:", err2)
+				return
+			}
+			if err3 != nil {
+				log.Print("error:", err3)
+				return
+			}
+
+			if err = c.ReadJSON(&resp); err != nil {
+				log.Print("error:", err)
+				return
+			}
+
+			switch resp.Ret {
+			case mediakeeper.RetError:
+				log.Println(resp.Err)
+				continue loop
+			case mediakeeper.RetOK:
+				log.Println("archived:", task.src, string(resp.Data))
+			default:
+				log.Println("Invalid response:", resp)
+				return
+			}
+		}
+
 	}
 }
 

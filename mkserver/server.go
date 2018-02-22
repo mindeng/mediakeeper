@@ -93,7 +93,7 @@ func handleCmdPutFile(req *mediakeeper.CmdRequest, r io.Reader) *mediakeeper.Cmd
 	}
 
 	log.Println("save file ", p)
-	if err := saveFile(p, data, r); err != nil {
+	if err := saveFile(p, data, r, true); err != nil {
 		resp.Err = err.Error()
 	} else {
 		resp.Ret = mediakeeper.RetOK
@@ -102,12 +102,34 @@ func handleCmdPutFile(req *mediakeeper.CmdRequest, r io.Reader) *mediakeeper.Cmd
 	return &resp
 }
 
-func CopyFileFromReader(dst string, src io.Reader, modTime time.Time, checksum uint64) error {
-	f, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL, 0644)
-	if err != nil {
-		return err
+func handleCmdPutFileForce(req *mediakeeper.CmdRequest, r io.Reader) *mediakeeper.CmdResponse {
+	resp := mediakeeper.CmdResponse{Ret: mediakeeper.RetError}
+
+	p := path.Join(rootDir, req.Path)
+	var data mediakeeper.FileInfo
+	if err := json.Unmarshal(req.Data, &data); err != nil {
+		resp.Err = err.Error()
+		return &resp
 	}
-	f.Close()
+
+	log.Println("save file ", p)
+	if err := saveFile(p, data, r, false); err != nil {
+		resp.Err = err.Error()
+	} else {
+		resp.Ret = mediakeeper.RetOK
+		resp.Data = []byte(p)
+	}
+	return &resp
+}
+
+func CopyFileFromReader(dst string, src io.Reader, modTime time.Time, checksum uint64, excl bool) error {
+	if excl {
+		f, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL, 0644)
+		if err != nil {
+			return err
+		}
+		f.Close()
+	}
 
 	in := src
 
@@ -139,12 +161,12 @@ func CopyFileFromReader(dst string, src io.Reader, modTime time.Time, checksum u
 	return os.Rename(tmp.Name(), dst)
 }
 
-func saveFile(p string, info mediakeeper.FileInfo, r io.Reader) error {
+func saveFile(p string, info mediakeeper.FileInfo, r io.Reader, excl bool) error {
 	if err := os.MkdirAll(path.Dir(p), 0755); err != nil {
 		return err
 	}
 
-	if err := CopyFileFromReader(p, r, info.ModTime, info.Hash); err != nil {
+	if err := CopyFileFromReader(p, r, info.ModTime, info.Hash, excl); err != nil {
 		return err
 	}
 
@@ -231,6 +253,20 @@ loop:
 
 			task := lockFile(req.Path, true, c)
 			resp = handleCmdPutFile(&req, r)
+			unlockFile(task, true, c)
+		case mediakeeper.CmdPutFileForce:
+			mt, r, err := c.NextReader()
+			if err != nil {
+				log.Println("error CmdPutFileForce read:", err)
+				break loop
+			}
+			if mt != websocket.BinaryMessage {
+				log.Print("error CmdPutFileForce: message type is not binary")
+				break loop
+			}
+
+			task := lockFile(req.Path, true, c)
+			resp = handleCmdPutFileForce(&req, r)
 			unlockFile(task, true, c)
 		default:
 			log.Println("error cmd:", req.Cmd)

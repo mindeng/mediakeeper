@@ -9,6 +9,7 @@ type CmdID int
 const (
 	CmdGetHash CmdID = iota
 	CmdPutFile
+	CmdPutFileForce
 )
 
 type ReturnCode int
