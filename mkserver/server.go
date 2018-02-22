@@ -166,7 +166,7 @@ func lockFile(p string, wflag bool, logid interface{}) *taskInfo {
 
 		return task
 	} else {
-		log.Printf("[%p] new task %s", logid, p)
+		// log.Printf("[%p] new task %s", logid, p)
 
 		task = &taskInfo{dst: p}
 		taskMgr.tasks[p] = task
@@ -181,7 +181,7 @@ func lockFile(p string, wflag bool, logid interface{}) *taskInfo {
 }
 
 func unlockFile(task *taskInfo, wflag bool, logid interface{}) {
-	log.Printf("[%p] delete task %s", logid, task.dst)
+	// log.Printf("[%p] del task %s", logid, task.dst)
 
 	taskMgr.lock.Lock()
 	delete(taskMgr.tasks, task.dst)
