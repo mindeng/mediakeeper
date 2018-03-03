@@ -15,13 +15,14 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"bitbucket.org/minotes/mediakeeper"
 	"github.com/gorilla/websocket"
 	"github.com/mindeng/goutils"
-	"github.com/mindeng/mediakeeper"
 )
 
 var host = flag.String("host", "localhost", "host")
 var port = flag.String("port", "3333", "port")
+var noraw = flag.Bool("noraw", false, "ignore raw files")
 
 type archiveTask struct {
 	id  int
@@ -71,6 +72,14 @@ func (archiver *Archiver) archive(p string) {
 
 func (archiver *Archiver) walkDirectory(dir string, tasks chan string) {
 	archiver.total = 0
+
+	archiveFunc := func(path string) {
+		// need to archive
+		// log.Println("put ", path)
+		tasks <- path
+		archiver.total++
+	}
+
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "walk error: %v %s\n", err, path)
@@ -85,11 +94,14 @@ func (archiver *Archiver) walkDirectory(dir string, tasks chan string) {
 			return nil
 		}
 		switch strings.ToLower(filepath.Ext(info.Name())) {
-		case ".jpg", ".jpeg", ".png", ".arw", ".nef", ".avi", ".mp4", ".mov", ".m4v", ".m4a":
-			// need to archive
-			// log.Println("put ", path)
-			tasks <- path
-			archiver.total++
+		case ".arw", ".nef":
+			if *noraw {
+				log.Println("ignore raw file:", path)
+				archiveFunc(path)
+			}
+			return nil
+		case ".jpg", ".jpeg", ".png", ".avi", ".mp4", ".mov", ".m4v", ".m4a", ".gif":
+			archiveFunc(path)
 			return nil
 		default:
 			return nil
