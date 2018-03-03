@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"bitbucket.org/minotes/mediakeeper"
 	"github.com/gorilla/websocket"
-	"github.com/mindeng/mediakeeper"
 )
 
 var host = flag.String("host", "", "host")
